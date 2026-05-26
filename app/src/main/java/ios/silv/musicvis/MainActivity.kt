@@ -124,13 +124,10 @@ class MainActivity : ComponentActivity() {
                             val cellWidth = w / frameCount
 
                             repeat(frameCount) { i ->
-                                val leftSample = byteArrayOf((frames[i] shr 24).toByte(), (frames[i] shr 16).toByte())
-                                val l = leftSample[0]
-                                val r = leftSample[1]
-                                val sample = (l.toInt() + r shl 8).toShort()
-
-                                if (sample > 0) {
-                                    val t = sample.toFloat() / Short.MAX_VALUE
+                                val sample = frames[i]
+                                val left = (sample shr 16).toShort()
+                                if (left > 0) {
+                                    val t = left.toFloat() / Short.MAX_VALUE
                                     drawRect(
                                         color = Color.Red,
                                         topLeft = Offset(
@@ -143,7 +140,7 @@ class MainActivity : ComponentActivity() {
                                         )
                                     )
                                 } else {
-                                    val t = sample.toFloat() / Short.MIN_VALUE
+                                    val t = left.toFloat() / Short.MIN_VALUE
                                     drawRect(
                                         color = Color.Red,
                                         topLeft = Offset(

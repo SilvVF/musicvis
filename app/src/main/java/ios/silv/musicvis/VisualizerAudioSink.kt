@@ -31,8 +31,6 @@ class VisualizerAudioSink(
     private var currentBuffer = globalFrames1
     private var nextBuffer = globalFrames2
 
-    private var globalFramesCount = 0
-
     override fun configure(
         inputFormat: Format,
         specifiedBufferSize: Int,
@@ -67,18 +65,17 @@ class VisualizerAudioSink(
         val frameSizeInBytes = channelCount * bytesPerSample
         val frames = buffer.remaining() / frameSizeInBytes
 
-        logcat { frameSizeInBytes.toString() }
-
+        buffer.mark()
         val ib = buffer.asIntBuffer()
+
         ib.get(currentBuffer, 0, frames)
-
-        globalFramesCount = frames
-
-        renderSnapshot.value = currentBuffer to globalFramesCount
+        renderSnapshot.value = currentBuffer to frames
 
         currentBuffer = nextBuffer.also {
             nextBuffer = currentBuffer
         }
+
+        buffer.reset()
 
         return super.handleBuffer(buffer, presentationTimeUs, encodedAccessUnitCount)
     }
