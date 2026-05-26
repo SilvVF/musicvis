@@ -124,7 +124,11 @@ class MainActivity : ComponentActivity() {
                             val cellWidth = w / frameCount
 
                             repeat(frameCount) { i ->
-                                val sample = frames[i]
+                                val leftSample = byteArrayOf((frames[i] shr 24).toByte(), (frames[i] shr 16).toByte())
+                                val l = leftSample[0]
+                                val r = leftSample[1]
+                                val sample = (l.toInt() + r shl 8).toShort()
+
                                 if (sample > 0) {
                                     val t = sample.toFloat() / Short.MAX_VALUE
                                     drawRect(

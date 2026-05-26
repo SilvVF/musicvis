@@ -18,15 +18,15 @@ class VisualizerAudioSink(
     context: Context
 ) : ForwardingAudioSink(DefaultAudioSink.Builder(context).build()) {
 
-    val renderSnapshot = MutableStateFlow(shortArrayOf() to 0)
+    val renderSnapshot = MutableStateFlow(intArrayOf() to 0)
 
     private var channelCount: Int = NO_VALUE
     private var sampleRate: Int = NO_VALUE
     private var encoding: Int = NO_VALUE
     private var bytesPerSample: Int = 0
 
-    private val globalFrames1 = ShortArray(2048)
-    private val globalFrames2 = ShortArray(2048)
+    private val globalFrames1 = IntArray(2048)
+    private val globalFrames2 = IntArray(2048)
 
     private var currentBuffer = globalFrames1
     private var nextBuffer = globalFrames2
@@ -67,8 +67,10 @@ class VisualizerAudioSink(
         val frameSizeInBytes = channelCount * bytesPerSample
         val frames = buffer.remaining() / frameSizeInBytes
 
-        val sb = buffer.asShortBuffer()
-        sb.get(currentBuffer, 0, frames)
+        logcat { frameSizeInBytes.toString() }
+
+        val ib = buffer.asIntBuffer()
+        ib.get(currentBuffer, 0, frames)
 
         globalFramesCount = frames
 
