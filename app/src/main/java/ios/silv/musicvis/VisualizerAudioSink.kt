@@ -18,7 +18,7 @@ import java.nio.ByteBuffer
 import kotlin.math.abs
 import kotlin.math.max
 
-private const val N = 256
+private const val N = 2048
 
 data class Output(
     val out: ComplexFloatArray,
@@ -44,7 +44,7 @@ class VisualizerAudioSink(
     private var bytesPerSample: Int = 0
 
     private val inp = FloatArray(N)
-    private val frameBuff = IntArray(2048)
+    private val frameBuff = IntArray(N)
 
     override fun configure(
         inputFormat: Format,
@@ -80,17 +80,12 @@ class VisualizerAudioSink(
         val frameSizeInBytes = channelCount * bytesPerSample
         val frames = buffer.remaining() / frameSizeInBytes
 
-        if (frames < N) {
-            logcat(LogPriority.ERROR) { "not enough frames in buffer" }
-            return super.handleBuffer(buffer, presentationTimeUs, encodedAccessUnitCount)
-        }
-
         buffer.mark()
         val ib = buffer.asIntBuffer()
         ib.get(frameBuff, 0, minOf(frames, frameBuff.size))
         buffer.reset()
 
-        for (i in 0..<N) {
+        for (i in 0..<minOf(frames, frameBuff.size)) {
             val sample = frameBuff[i]
             val left = (sample shr 16).toShort()
             inp[i] = left.toFloat()
@@ -98,7 +93,7 @@ class VisualizerAudioSink(
 
         val out = FFT.iterativeFFT(inp)
 
-        renderSnapshot.value = Output(out, N)
+        renderSnapshot.value = Output(out, out.size)
 
         return super.handleBuffer(buffer, presentationTimeUs, encodedAccessUnitCount)
     }
