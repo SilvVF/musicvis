@@ -104,7 +104,6 @@ class MainActivity : ComponentActivity() {
             }
 
             val state by customAudioSink.renderSnapshot.collectAsStateWithLifecycle()
-            val (frames, frameCount) = state
 
             MusicvisTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
@@ -118,16 +117,16 @@ class MainActivity : ComponentActivity() {
                                 .fillMaxWidth()
                                 .fillMaxHeight(0.5f)
                         ) {
+                            val (out, frames) = state
+                            val maxAmp = state.maxAmp
                             val w = size.width
                             val h = size.height
 
-                            val cellWidth = w / frameCount
+                            val cellWidth = w / frames
 
-                            repeat(frameCount) { i ->
-                                val sample = frames[i]
-                                val left = (sample shr 16).toShort()
-                                if (left > 0) {
-                                    val t = left.toFloat() / Short.MAX_VALUE
+                            repeat(frames) { i ->
+                                val t = amp(out[i])/maxAmp
+                                if (t > 0) {
                                     drawRect(
                                         color = Color.Red,
                                         topLeft = Offset(
@@ -140,7 +139,6 @@ class MainActivity : ComponentActivity() {
                                         )
                                     )
                                 } else {
-                                    val t = left.toFloat() / Short.MIN_VALUE
                                     drawRect(
                                         color = Color.Red,
                                         topLeft = Offset(
