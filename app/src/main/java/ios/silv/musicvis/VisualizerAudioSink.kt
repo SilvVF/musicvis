@@ -19,15 +19,15 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.newSingleThreadContext
 import logcat.logcat
 import org.jetbrains.kotlinx.multik.ndarray.complex.ComplexFloat
+import org.jetbrains.kotlinx.multik.ndarray.complex.ComplexFloatArray
 import java.nio.Buffer
 import java.nio.ByteBuffer
 import kotlin.math.ceil
 import kotlin.math.cos
 import kotlin.math.ln
-import kotlin.math.max
 
 
-private const val N = 1 shl 10
+private const val FFT_SIZE = 1 shl 10
 
 @Immutable
 @Stable
@@ -83,8 +83,9 @@ class VisualizerAudioSink(
     private var sampleRate: Int = NO_VALUE
     private var encoding: Int = NO_VALUE
 
-    private val inp = FloatArray(N)
-    private val inpWin = FloatArray(N)
+    private val inp = FloatArray(FFT_SIZE)
+    private val inpWin = FloatArray(FFT_SIZE)
+    private val outRaw = ComplexFloatArray(FFT_SIZE)
 
 
     var skipNext = false
@@ -167,15 +168,13 @@ class VisualizerAudioSink(
                 }
 
                 fftJob = scope.launch {
-                    val outRaw = FFT.pick(inpWin, inpWin.size)
-
-                    val outLog = FloatArray(N/2)
+                    val outRaw = FFT.iterativeFFT(outRaw, inpWin, inpWin.size)
+                    val outLog = FloatArray(FFT_SIZE/2)
 
                     val step = 1.06f
                     val lowf = 1.0f
                     var m = 0
                     var maxAmp = 1.0f
-                    val FFT_SIZE = N
 
                     var f = lowf
                     while (f.toInt() < FFT_SIZE / 2) {
