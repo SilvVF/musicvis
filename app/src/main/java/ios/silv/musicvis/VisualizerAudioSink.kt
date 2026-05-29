@@ -24,7 +24,7 @@ import kotlin.math.cos
 import kotlin.math.ln
 
 
-private const val N = 1 shl 13
+private const val N = 1 shl 10
 
 data class Output(
     val out: ComplexFloatArray = ComplexFloatArray(),
@@ -132,13 +132,14 @@ class VisualizerAudioSink(
             // https://www.youtube.com/redirect?event=video_description&redir_token=QUFFLUhqbTRsZ1d4RFFNclRGRnFXWHFwZk1fRC1DSkVrZ3xBQ3Jtc0ttdEF4LUpqU1hGTjREU0hxWFJ6Y3ZtUUcxa3VmTDZmRW9kcTItcHh3ajJzdmt0VVl5blAxdGVyMURmMlk2QlBtNGRvbG9LLWEzZ2RnMjFDYWZZSTVWVnZQRTFoMVRaRXFZcHR2UFliMVlzQ1RucVE0SQ&q=https%3A%2F%2Fen.wikipedia.org%2Fwiki%2FHann_function&v=ivLIov6ta-8
 
             if (fftJob?.isActive?.not() ?: true) {
-                fftJob = scope.launch {
-                    for (i in 0..inp.lastIndex) {
-                        val t = i.toFloat() / inp.size
-                        val hann = 0.5f - 0.5f * cos(2f * FFT.pi * t)
-                        inp2[i] = inp[i] * hann
-                    }
 
+                for (i in 0..inp.lastIndex) {
+                    val t = i.toFloat() / inp.size
+                    val hann = 0.5f - 0.5f * cos(2f * FFT.pi * t)
+                    inp2[i] = inp[i] * hann
+                }
+
+                fftJob = scope.launch {
                     val out = FFT.pick(inp2, inp2.size)
                     fftOutput.emit(Output(out, out.size))
                 }
