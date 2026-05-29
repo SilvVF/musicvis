@@ -1,12 +1,17 @@
 package ios.silv.musicvis
 
 import android.content.Context
+import android.graphics.RectF
 import android.os.Bundle
 import android.os.Handler
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.annotation.OptIn
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.AnimationVector1D
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -14,12 +19,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.core.graphics.toColor
 import androidx.core.net.toUri
 import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -41,10 +48,8 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.jetbrains.kotlinx.multik.ndarray.complex.ComplexFloatArray
-import org.jetbrains.kotlinx.multik.ndarray.complex.isEmpty
-import org.jetbrains.kotlinx.multik.ndarray.complex.take
 import java.io.File
-import kotlin.math.ceil
+import kotlin.math.sqrt
 
 
 class MainActivity : ComponentActivity() {
@@ -62,7 +67,7 @@ class MainActivity : ComponentActivity() {
             .stateIn(
                 lifecycleScope,
                 SharingStarted.Lazily,
-                Output(ComplexFloatArray(), 0)
+                Output()
             )
 
         val player = ExoPlayer.Builder(
@@ -127,14 +132,30 @@ class MainActivity : ComponentActivity() {
                             .fillMaxSize()
                             .padding(innerPadding)
                     ) {
+                        val (_, out, m) = state
+                        if (m == 0) return@Column
+
+                        val animatedValues = remember {
+                            List(m) { Animatable(out[it]) }
+                        }
+
+                        LaunchedEffect(out) {
+                            for (i in 0..<m) {
+                                launch {
+                                    animatedValues[i].animateTo(
+                                        out[i],
+                                        animationSpec = tween(durationMillis = 30, easing = LinearEasing)
+                                    )
+                                }
+                            }
+                        }
+
                         Canvas(
                             Modifier
                                 .fillMaxWidth()
                                 .fillMaxHeight(0.6f)
                         ) {
-                            drawRect(Color.Black, size = size)
-
-                            visualizer2(state)
+                            visualizer2(animatedValues)
                         }
                         Player(
                             modifier = Modifier,
@@ -147,49 +168,39 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-fun DrawScope.visualizer2(state: Output) {
-
-    val (out, frames) = state
-    if (out.isEmpty()) return
-
+fun DrawScope.visualizer2(
+    values:  List<Animatable<Float, AnimationVector1D>>
+) {
+    drawRect(Color.DarkGray, size = size)
     val w = size.width
     val h = size.height
-    // input to fft is real so ignore second half of output
-    val N = frames / 2
-    val maxAmp = state.out.take(N).maxOf { amp(it) }
-    val step = 1.06f
-    val lowf = 1f
-    var m = 0
+    val m = values.size
 
-    loop(lowf, { f -> f < N }, { f ->  ceil(f * step) }) {
-        m += 1
-    }
+    // The width of a single bar
+    val cell_width = w / m;
 
-    val cellWidth = w / m
-    m = 0
+    // Global color parameters
+    val saturation = 0.75f;
+    val value = 1.0f;
 
-    loop(lowf, { f -> f < N }, { f -> ceil(f * step) }) { f ->
-        val f1 = ceil(f * step)
-        var a = 0f
-        loop(f, { q -> q < N  && q < f1.toInt() }, { q -> q + 1}) { q ->
-            val b = amp(out[q.toInt()])
-            a = maxOf(a, b)
-        }
+    // Display the Bars
+    for (i in 0..<m) {
+        val t = values[i].value
+        val hue = i.toFloat() / m
 
-        val t = a / maxAmp
-        val barHeight = h / 2 * t
+        val startX = i * cell_width
+        val startY = h * t
 
-        drawRect(
-            color = Color.Green,
-            topLeft = Offset(
-                x = m * cellWidth,
-                y = h - barHeight
-            ),
-            size = Size(
-                width = cellWidth,
-                height = barHeight
-            )
+        val endX = i * cell_width
+        val endY = h
+
+        val thick = cell_width
+
+        drawLine(
+            color = Color.hsv(hue * 360, saturation, value),
+            start = Offset(startX, startY),
+            end = Offset(endX, endY),
+            strokeWidth = thick
         )
-        m += 1
     }
 }

@@ -2,6 +2,8 @@ package ios.silv.musicvis
 
 import android.content.Context
 import androidx.annotation.OptIn
+import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.Stable
 import androidx.media3.common.C
 import androidx.media3.common.Format
 import androidx.media3.common.Format.NO_VALUE
@@ -17,19 +19,43 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.newSingleThreadContext
 import logcat.logcat
 import org.jetbrains.kotlinx.multik.ndarray.complex.ComplexFloat
-import org.jetbrains.kotlinx.multik.ndarray.complex.ComplexFloatArray
 import java.nio.Buffer
 import java.nio.ByteBuffer
+import kotlin.math.ceil
 import kotlin.math.cos
 import kotlin.math.ln
+import kotlin.math.max
 
 
 private const val N = 1 shl 10
 
+@Immutable
+@Stable
 data class Output(
-    val out: ComplexFloatArray = ComplexFloatArray(),
+    val outSmear: FloatArray = floatArrayOf(),
+    val outSmooth: FloatArray = floatArrayOf(),
     val frames: Int = 0,
-)
+) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+
+        other as Output
+
+        if (frames != other.frames) return false
+        if (!outSmear.contentEquals(other.outSmear)) return false
+        if (!outSmooth.contentEquals(other.outSmooth)) return false
+
+        return true
+    }
+
+    override fun hashCode(): Int {
+        var result = frames
+        result = 31 * result + outSmear.contentHashCode()
+        result = 31 * result + outSmooth.contentHashCode()
+        return result
+    }
+}
 
 // magnitude of the vector formed by complex number
 // https://youtu.be/ivLIov6ta-8?list=PLpM-Dvs8t0Vak1rrE2NJn8XYEJ5M7-BqT&t=1103
@@ -58,7 +84,8 @@ class VisualizerAudioSink(
     private var encoding: Int = NO_VALUE
 
     private val inp = FloatArray(N)
-    private val inp2 = FloatArray(N)
+    private val inpWin = FloatArray(N)
+
 
     var skipNext = false
 
@@ -136,12 +163,48 @@ class VisualizerAudioSink(
                 for (i in 0..inp.lastIndex) {
                     val t = i.toFloat() / inp.size
                     val hann = 0.5f - 0.5f * cos(2f * FFT.pi * t)
-                    inp2[i] = inp[i] * hann
+                    inpWin[i] = inp[i] * hann
                 }
 
                 fftJob = scope.launch {
-                    val out = FFT.pick(inp2, inp2.size)
-                    fftOutput.emit(Output(out, out.size))
+                    val outRaw = FFT.pick(inpWin, inpWin.size)
+
+                    val outLog = FloatArray(N/2)
+
+                    val step = 1.06f
+                    val lowf = 1.0f
+                    var m = 0
+                    var maxAmp = 1.0f
+                    val FFT_SIZE = N
+
+                    var f = lowf
+                    while (f.toInt() < FFT_SIZE / 2) {
+                        val f1 = ceil(f * step)
+                        var a = 0.0f
+
+                        var q = f.toInt()
+                        while (q < FFT_SIZE / 2 && q < f1.toInt()) {
+                            val b = amp(outRaw[q])
+                            if (b > a) a = b
+                            q++
+                        }
+
+                        if (maxAmp < a) maxAmp = a
+                        outLog[m++] = a
+
+                        f = ceil(f * step)
+                    }
+
+                    // Normalize Frequencies to 0..1 range
+                    for (i in 0..<m) {
+                        outLog[i] /= maxAmp
+                    }
+
+                    assert(outLog.all { it in 0f..1f }) {
+                        "value out of range"
+                    }
+
+                    fftOutput.emit(Output(outLog, outLog, m))
                 }
             }
         }
