@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.core.net.toUri
 import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -34,10 +35,16 @@ import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 import androidx.media3.ui.compose.material3.Player
 import ios.silv.musicvis.ui.theme.MusicvisTheme
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.sample
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import logcat.logcat
+import org.jetbrains.kotlinx.multik.ndarray.complex.ComplexFloatArray
+import org.jetbrains.kotlinx.multik.ndarray.complex.isEmpty
+import org.jetbrains.kotlinx.multik.ndarray.complex.take
 import java.io.File
+import kotlin.math.ceil
 
 
 class MainActivity : ComponentActivity() {
@@ -49,6 +56,14 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         val customAudioSink = VisualizerAudioSink(this)
+
+        val renderSnapshot = customAudioSink.fftOutput
+            .sample(1)
+            .stateIn(
+                lifecycleScope,
+                SharingStarted.Lazily,
+                Output(ComplexFloatArray(), 0)
+            )
 
         val player = ExoPlayer.Builder(
             this,
@@ -103,7 +118,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            val state by customAudioSink.renderSnapshot.collectAsStateWithLifecycle()
+            val state by renderSnapshot.collectAsStateWithLifecycle()
 
             MusicvisTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
@@ -115,43 +130,11 @@ class MainActivity : ComponentActivity() {
                         Canvas(
                             Modifier
                                 .fillMaxWidth()
-                                .fillMaxHeight(0.5f)
+                                .fillMaxHeight(0.6f)
                         ) {
-                            val (out, frames) = state
-                            val maxAmp = state.maxAmp
-                            val w = size.width
-                            val h = size.height
+                            drawRect(Color.Black, size = size)
 
-                            val cellWidth = w / frames
-
-                            repeat(frames) { i ->
-                                val t = amp(out[i])/maxAmp
-                                if (t > 0) {
-                                    drawRect(
-                                        color = Color.Red,
-                                        topLeft = Offset(
-                                            x = i * cellWidth,
-                                            y = h / 2 - h / 2 * t
-                                        ),
-                                        size = Size(
-                                            width = cellWidth,
-                                            height = h / 2 * t
-                                        )
-                                    )
-                                } else {
-                                    drawRect(
-                                        color = Color.Red,
-                                        topLeft = Offset(
-                                            x = i * cellWidth,
-                                            y = h / 2
-                                        ),
-                                        size = Size(
-                                            width = cellWidth,
-                                            height = h / 2 * t
-                                        )
-                                    )
-                                }
-                            }
+                            visualizer2(state)
                         }
                         Player(
                             modifier = Modifier,
@@ -164,3 +147,49 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+fun DrawScope.visualizer2(state: Output) {
+
+    val (out, frames) = state
+    if (out.isEmpty()) return
+
+    val w = size.width
+    val h = size.height
+    // input to fft is real so ignore second half of output
+    val N = frames / 2
+    val maxAmp = state.out.take(N).maxOf { amp(it) }
+    val step = 1.06f
+    val lowf = 1f
+    var m = 0
+
+    loop(lowf, { f -> f < N }, { f ->  ceil(f * step) }) {
+        m += 1
+    }
+
+    val cellWidth = w / m
+    m = 0
+
+    loop(lowf, { f -> f < N }, { f -> ceil(f * step) }) { f ->
+        val f1 = ceil(f * step)
+        var a = 0f
+        loop(f, { q -> q < N  && q < f1.toInt() }, { q -> q + 1}) { q ->
+            val b = amp(out[q.toInt()])
+            a = maxOf(a, b)
+        }
+
+        val t = a / maxAmp
+        val barHeight = h / 2 * t
+
+        drawRect(
+            color = Color.Green,
+            topLeft = Offset(
+                x = m * cellWidth,
+                y = h - barHeight
+            ),
+            size = Size(
+                width = cellWidth,
+                height = barHeight
+            )
+        )
+        m += 1
+    }
+}
